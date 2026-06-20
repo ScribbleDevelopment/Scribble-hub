@@ -1,0 +1,217 @@
+-- Create the Tool instance
+local FlingTool = Instance.new("Tool")
+FlingTool.Name = "flinky"
+FlingTool.RequiresHandle = false
+
+-- Interface Variables
+local FlingUI = nil
+local MainFrame = nil
+local TargetInput = nil
+local AutocompleteLabel = nil
+local LaunchButton = nil
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Custom Animation Setup
+local FlingAnim = Instance.new("Animation")
+FlingAnim.AnimationId = "rbxassetid://2801965424"
+local LoadedTrack = nil
+
+-- Clean up any old instances of this interface left behind
+local function cleanOldUI()
+    local oldUI = game:GetService("CoreGui"):FindFirstChild("AbyssalToolUI")
+    if oldUI then oldUI:Destroy() end
+end
+
+-- Completely dynamic lookup function for ANY partial string matching
+local function getAutocompleteMatch(text)
+    if text == "" then return nil, "" end
+    text = text:lower()
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            -- Check if real username starts with the entered string pattern
+            if player.Name:lower():sub(1, #text) == text then
+                return player, player.Name
+            -- Check if display name starts with the entered string pattern
+            elseif player.DisplayName and player.DisplayName:lower():sub(1, #text) == text then
+                return player, player.DisplayName
+            end
+        end
+    end
+    return nil, ""
+end
+
+-- Builds the popup target box when the tool is equipped
+local function buildInterface()
+    cleanOldUI()
+    
+    FlingUI = Instance.new("ScreenGui")
+    FlingUI.Name = "AbyssalToolUI"
+    FlingUI.Parent = game:GetService("CoreGui")
+    FlingUI.ResetOnSpawn = false
+    
+    MainFrame = Instance.new("Frame")
+    MainFrame.Name = "MainFrame"
+    MainFrame.Parent = FlingUI
+    MainFrame.BackgroundColor3 = Color3.fromRGB(10, 25, 40) -- Deep Ocean Theme
+    MainFrame.Position = UDim2.new(0.5, -110, 0.4, -45)
+    MainFrame.Size = UDim2.new(0, 220, 0, 110)
+    MainFrame.Active = true
+    MainFrame.Draggable = true
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 8)
+    Corner.Parent = MainFrame
+    
+    TargetInput = Instance.new("TextBox")
+    TargetInput.Parent = MainFrame
+    TargetInput.BackgroundColor3 = Color3.fromRGB(20, 40, 60)
+    TargetInput.Position = UDim2.new(0.08, 0, 0.18, 0)
+    TargetInput.Size = UDim2.new(0.84, 0, 0, 30)
+    TargetInput.Font = Enum.Font.SourceSans
+    TargetInput.PlaceholderText = "Target Username..."
+    TargetInput.Text = ""
+    TargetInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TargetInput.TextSize = 14
+    TargetInput.ClearTextOnFocus = false
+    
+    local CornerIn = Instance.new("UICorner")
+    CornerIn.CornerRadius = UDim.new(0, 4)
+    CornerIn.Parent = TargetInput
+
+    -- Ghost label layered perfectly behind the text box for suggestions
+    AutocompleteLabel = Instance.new("TextLabel")
+    AutocompleteLabel.Parent = TargetInput
+    AutocompleteLabel.BackgroundTransparency = 1
+    AutocompleteLabel.Position = UDim2.new(0, 5, 0, 0)
+    AutocompleteLabel.Size = UDim2.new(1, -10, 1, 0)
+    AutocompleteLabel.Font = Enum.Font.SourceSans
+    AutocompleteLabel.Text = ""
+    AutocompleteLabel.TextColor3 = Color3.fromRGB(120, 140, 160) -- Muted gray hint text
+    AutocompleteLabel.TextSize = 14
+    AutocompleteLabel.TextXAlignment = Enum.TextXAlignment.Left
+    AutocompleteLabel.ZIndex = TargetInput.ZIndex - 1
+    
+    LaunchButton = Instance.new("TextButton")
+    LaunchButton.Parent = MainFrame
+    LaunchButton.BackgroundColor3 = Color3.fromRGB(0, 150, 120)
+    LaunchButton.Position = UDim2.new(0.08, 0, 0.55, 0)
+    LaunchButton.Size = UDim2.new(0.84, 0, 0, 35)
+    LaunchButton.Font = Enum.Font.SourceSansBold
+    LaunchButton.Text = "fling to space"
+    LaunchButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    LaunchButton.TextSize = 15
+    
+    local CornerL = Instance.new("UICorner")
+    CornerL.CornerRadius = UDim.new(0, 4)
+    CornerL.Parent = LaunchButton
+    
+    -- Dynamic tracking loop for real-time keystroke matching
+    local activeTarget = nil
+    TargetInput:GetPropertyChangedSignal("Text"):Connect(function()
+        local currentText = TargetInput.Text
+        local targetPlayer, fullMatchedName = getAutocompleteMatch(currentText)
+        
+        if targetPlayer then
+            activeTarget = targetPlayer
+            -- Replicate standard shell/IDE prediction overlays
+            local hintPart = fullMatchedName:sub(#currentText + 1)
+            AutocompleteLabel.Text = currentText .. hintPart
+        else
+            activeTarget = nil
+            AutocompleteLabel.Text = ""
+        end
+    end)
+    
+    -- Completes the typing selection automatically when focus is dropped
+    TargetInput.FocusLost:Connect(function(enterPressed)
+        if activeTarget and AutocompleteLabel.Text ~= "" then
+            TargetInput.Text = AutocompleteLabel.Text
+        end
+    end)
+    
+    -- Launch Click Event Execution Block
+    LaunchButton.MouseButton1Click:Connect(function()
+        local targetPlayer = activeTarget
+        if not targetPlayer then
+            local fallbackPlayer, _ = getAutocompleteMatch(TargetInput.Text)
+            targetPlayer = fallbackPlayer
+        end
+        
+        if not targetPlayer then return end
+        
+        local myChar = LocalPlayer.Character
+        local targetChar = targetPlayer.Character
+        if not myChar or not targetChar then return end
+        
+        local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+        local humanoid = myChar:FindFirstChildOfClass("Humanoid")
+        if not myHrp or not targetHrp or not humanoid then return end
+        
+        -- Play animation smoothly while visual state remains anchored
+        pcall(function()
+            LoadedTrack = humanoid:LoadAnimation(FlingAnim)
+            LoadedTrack:Play()
+        end)
+        
+        -- Cache current safe position
+        local originalCFrame = myHrp.CFrame
+        
+        -- Establish hidden physics overrides
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bodyVelocity.Velocity = Vector3.new(120000, 120000, 120000)
+        bodyVelocity.Parent = myHrp
+        
+        local bodyAngularVelocity = Instance.new("BodyAngularVelocity")
+        bodyAngularVelocity.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        bodyAngularVelocity.AngularVelocity = Vector3.new(0, 10000, 0) -- 10k Angular Speed
+        bodyAngularVelocity.Parent = myHrp
+        
+        -- Desynchronized Physical Interpolation Loop (X-Pattern Paths)
+        local startTime = os.clock()
+        local duration = 1.5
+        
+        while os.clock() - startTime < duration and targetHrp and targetHrp.Parent and myHrp and myHrp.Parent do
+            task.wait()
+            local elapsed = (os.clock() - startTime) * 12000 -- 12k movement factor
+            
+            local xOffset = math.sin(elapsed) * 4
+            local zOffset = math.cos(elapsed) * 4
+            local yOffset = (math.sin(elapsed * 2) * 2)
+            
+            if math.floor(elapsed / 10) % 2 == 0 then
+                myHrp.CFrame = targetHrp.CFrame * CFrame.new(xOffset, yOffset, xOffset)
+            else
+                myHrp.CFrame = targetHrp.CFrame * CFrame.new(xOffset, yOffset, -xOffset)
+            end
+        end
+        
+        -- Instantly terminate physics loops and restore original transform state
+        bodyVelocity:Destroy()
+        bodyAngularVelocity:Destroy()
+        
+        task.wait(0.01)
+        myHrp.CFrame = originalCFrame
+        myHrp.Velocity = Vector3.new(0, 0, 0)
+        myHrp.RotVelocity = Vector3.new(0, 0, 0)
+        
+        if LoadedTrack then LoadedTrack:Stop() end
+    end)
+end
+
+-- Hook up Tool Events
+FlingTool.Equipped:Connect(function()
+    buildInterface()
+end)
+
+FlingTool.Unequipped:Connect(function()
+    cleanOldUI()
+    if LoadedTrack then LoadedTrack:Stop() end
+end)
+
+-- Place tool into user inventory instantly
+FlingTool.Parent = LocalPlayer.Backpack
