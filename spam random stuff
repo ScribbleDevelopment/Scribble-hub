@@ -1,0 +1,14 @@
+while true do
+    local part = Instance.new("Part")
+    local msg = "sup gang your cookyed gang gang to the gang gang to the RAHHHH!"
+    local brdcast = Instance.new("Message")
+    
+    brdcast.Text = msg
+    brdcast.Parent = workspace
+    
+    part.Size = Vector3.new(2, 2, 2)
+    part.Position = Vector3.new(math.random(-100, 100), math.random(10, 50), math.random(-100, 100))
+    part.Parent = workspace
+    
+    task.wait(0.1)
+end
