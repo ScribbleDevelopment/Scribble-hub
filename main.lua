@@ -1,0 +1,1 @@
+loadstring(game:HttpGet("https://raw.githubusercontent.com/ScribbleDevelopment/Finished-Scribble-Script-Hub/refs/heads/main/Main"))()
