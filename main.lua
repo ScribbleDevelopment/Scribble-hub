@@ -1,5 +1,7 @@
 local TweenService = game:GetService("TweenService")
-local FontConfig = Enum.Font.Fondamento -- Applying the requested font style
+local TextChatService = game:GetService("TextChatService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local FontConfig = Enum.Font.Fondamento
 
 local function Scribblehub()
     loadstring(game:HttpGet("https://raw.githubusercontent.com/ScribbleDevelopment/Finished-Scribble-Script-Hub/refs/heads/main/Main"))()
@@ -10,25 +12,22 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ScribbleConfirmation"
 screenGui.Parent = game.Players.LocalPlayer:WaitForChild("PlayerGui")
 
--- Main Frame (Glassmorphism style)
+-- Main Frame
 local frame = Instance.new("Frame")
 frame.Size = UDim2.new(0, 300, 0, 150)
 frame.Position = UDim2.new(0.5, -150, 0.5, -75)
 frame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
-frame.BackgroundTransparency = 0.2 -- Glass effect
+frame.BackgroundTransparency = 0.2
 frame.BorderSizePixel = 0
 frame.Parent = screenGui
 
-local corner = Instance.new("UICorner", frame)
-corner.CornerRadius = UDim.new(0, 12)
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
 
--- Glowing Border
 local stroke = Instance.new("UIStroke", frame)
-stroke.Color = Color3.fromRGB(0, 255, 255) -- Neon Blue
+stroke.Color = Color3.fromRGB(0, 255, 255)
 stroke.Thickness = 2
 stroke.Transparency = 0.5
 
--- Animate the glow (Pulse effect)
 task.spawn(function()
     while frame.Parent do
         local tween = TweenService:Create(stroke, TweenInfo.new(1.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 0, true), {Transparency = 0})
@@ -37,7 +36,6 @@ task.spawn(function()
     end
 end)
 
--- Title
 local label = Instance.new("TextLabel", frame)
 label.Text = "ARE YOU SURE?"
 label.Size = UDim2.new(1, 0, 0.4, 0)
@@ -45,8 +43,8 @@ label.BackgroundTransparency = 1
 label.TextColor3 = Color3.fromRGB(255, 255, 255)
 label.Font = FontConfig
 label.TextSize = 24
+label.Parent = frame
 
--- Stylized Button Generator
 local function createButton(text, color, pos)
     local btn = Instance.new("TextButton", frame)
     btn.Text = text
@@ -60,13 +58,37 @@ local function createButton(text, color, pos)
     return btn
 end
 
--- Buttons
 local yesBtn = createButton("YES", Color3.fromRGB(0, 150, 255), UDim2.new(0.1, 0, 0.6, 0))
 local noBtn = createButton("NO", Color3.fromRGB(60, 60, 60), UDim2.new(0.55, 0, 0.6, 0))
 
+local function sendChatMessage(msg)
+    -- Method 1: TextChatService (Modern)
+    local textChannel = TextChatService:FindFirstChild("TextChannels") and TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+    if textChannel then
+        textChannel:SendAsync(msg)
+        return true
+    end
+    
+    -- Method 2: Legacy Remote
+    local legacyRemote = ReplicatedStorage:FindFirstChild("SayMessageRequest", true)
+    if legacyRemote then
+        legacyRemote:FireServer(msg, "All")
+        return true
+    end
+    
+    return false
+end
+
 yesBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
-    task.wait(5)
+    
+    local messages = {"yo to the yo tengomessy SCRIBBLES BEST LOADED", "im sigma", "enjoy the cewl hub"}
+    
+    for i, msg in ipairs(messages) do
+        sendChatMessage(msg)
+        if i < #messages then task.wait(0.3) end
+    end
+    
     Scribblehub()
 end)
 
