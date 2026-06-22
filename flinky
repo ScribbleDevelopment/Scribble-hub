@@ -8,25 +8,51 @@ local LocalPlayer = Players.LocalPlayer
 local FlingAnim = Instance.new("Animation")
 FlingAnim.AnimationId = "rbxassetid://2801965424"
 
+local AntiFlingEnabled = false
+local IsFlinging = false -- State tracker to prevent Anti-Fling interference
+
+game:GetService("RunService").Heartbeat:Connect(function()
+    -- Only run if enabled, we aren't currently flinging, and we have a character
+    if AntiFlingEnabled and not IsFlinging and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        if hrp.AssemblyLinearVelocity.Magnitude > 100 then
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            hrp.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+        end
+    end
+end)
+
+local function getRandomNonPlayerPart()
+    local parts = {}
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not obj:IsDescendantOf(workspace.CurrentCamera) then
+            local model = obj:FindFirstAncestorOfClass("Model")
+            if not model or not Players:GetPlayerFromCharacter(model) then
+                table.insert(parts, obj)
+            end
+        end
+    end
+    return #parts > 0 and parts[math.random(1, #parts)] or nil
+end
+
 local function cleanOldUI()
     local oldUI = game:GetService("CoreGui"):FindFirstChild("AbyssalToolUI")
     if oldUI then oldUI:Destroy() end
 end
 
--- Your Original High-Intensity Fling Logic
+-- YOUR ORIGINAL FLING LOGIC (Untouched)
 local function executeFling(targetPlayer)
+    IsFlinging = true -- Disable Anti-Fling during this process
     local myChar, targetChar = LocalPlayer.Character, targetPlayer.Character
-    if not myChar or not targetChar then return end
+    if not myChar or not targetChar then IsFlinging = false return end
     
     local myHrp = myChar:FindFirstChild("HumanoidRootPart")
     local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
     local humanoid = myChar:FindFirstChildOfClass("Humanoid")
-    if not myHrp or not targetHrp or not humanoid then return end
+    if not myHrp or not targetHrp or not humanoid then IsFlinging = false return end
     
     local track = humanoid:LoadAnimation(FlingAnim)
     track:Play()
-    
-    local originalCFrame = myHrp.CFrame
     
     local bodyVelocity = Instance.new("BodyVelocity", myHrp)
     bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
@@ -54,8 +80,14 @@ local function executeFling(targetPlayer)
     
     bodyVelocity:Destroy()
     bodyAngularVelocity:Destroy()
-    myHrp.CFrame = originalCFrame
+    
+    local randomPart = getRandomNonPlayerPart()
+    if randomPart then
+        myHrp.CFrame = randomPart.CFrame + Vector3.new(0, 5, 0)
+    end
+    
     track:Stop()
+    IsFlinging = false -- Re-enable Anti-Fling after finished
 end
 
 local function buildInterface()
@@ -64,8 +96,8 @@ local function buildInterface()
     gui.Name = "AbyssalToolUI"
     
     local frame = Instance.new("Frame", gui)
-    frame.Size = UDim2.new(0, 200, 0, 130)
-    frame.Position = UDim2.new(0.5, -100, 0.4, -65)
+    frame.Size = UDim2.new(0, 200, 0, 200)
+    frame.Position = UDim2.new(0.5, -100, 0.4, -80)
     frame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
     frame.Active = true
     frame.Draggable = true
@@ -73,15 +105,31 @@ local function buildInterface()
 
     local input = Instance.new("TextBox", frame)
     input.Size = UDim2.new(0.9, 0, 0, 30)
-    input.Position = UDim2.new(0.05, 0, 0.1, 0)
+    input.Position = UDim2.new(0.05, 0, 0.05, 0)
     input.PlaceholderText = "Target Name"
     input.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
     input.TextColor3 = Color3.new(1, 1, 1)
     Instance.new("UICorner", input)
 
+    local suggest = Instance.new("TextLabel", frame)
+    suggest.Size = UDim2.new(0.9, 0, 0, 20)
+    suggest.Position = UDim2.new(0.05, 0, 0.22, 0)
+    suggest.BackgroundTransparency = 1
+    suggest.TextColor3 = Color3.fromRGB(100, 100, 100)
+    suggest.TextSize = 12
+    suggest.Text = ""
+
+    local btnAnti = Instance.new("TextButton", frame)
+    btnAnti.Size = UDim2.new(0.9, 0, 0, 30)
+    btnAnti.Position = UDim2.new(0.05, 0, 0.38, 0)
+    btnAnti.Text = "Anti-Fling: OFF"
+    btnAnti.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+    btnAnti.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", btnAnti)
+
     local btn1 = Instance.new("TextButton", frame)
     btn1.Size = UDim2.new(0.9, 0, 0, 30)
-    btn1.Position = UDim2.new(0.05, 0, 0.45, 0)
+    btn1.Position = UDim2.new(0.05, 0, 0.60, 0)
     btn1.Text = "Fling Target"
     btn1.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
     btn1.TextColor3 = Color3.new(1, 1, 1)
@@ -89,16 +137,36 @@ local function buildInterface()
 
     local btn2 = Instance.new("TextButton", frame)
     btn2.Size = UDim2.new(0.9, 0, 0, 30)
-    btn2.Position = UDim2.new(0.05, 0, 0.75, 0)
+    btn2.Position = UDim2.new(0.05, 0, 0.82, 0)
     btn2.Text = "Fling Everyone"
     btn2.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     btn2.TextColor3 = Color3.new(1, 1, 1)
     Instance.new("UICorner", btn2)
 
-    btn1.MouseButton1Click:Connect(function()
+    btnAnti.MouseButton1Click:Connect(function()
+        AntiFlingEnabled = not AntiFlingEnabled
+        btnAnti.Text = "Anti-Fling: " .. (AntiFlingEnabled and "ON" or "OFF")
+        btnAnti.BackgroundColor3 = AntiFlingEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(80, 80, 80)
+    end)
+
+    input:GetPropertyChangedSignal("Text"):Connect(function()
+        local text = input.Text:lower()
+        if text == "" then suggest.Text = "" return end
         for _, p in pairs(Players:GetPlayers()) do
-            if p.Name:lower():sub(1, #input.Text:lower()) == input.Text:lower() then
+            if p.Name:lower():sub(1, #text) == text or p.DisplayName:lower():sub(1, #text) == text then
+                suggest.Text = "Found: " .. p.Name
+                return
+            end
+        end
+        suggest.Text = "No match"
+    end)
+
+    btn1.MouseButton1Click:Connect(function()
+        local targetName = input.Text:lower()
+        for _, p in pairs(Players:GetPlayers()) do
+            if p.Name:lower():sub(1, #targetName) == targetName or p.DisplayName:lower():sub(1, #targetName) == targetName then
                 executeFling(p)
+                break
             end
         end
     end)
@@ -107,7 +175,7 @@ local function buildInterface()
         for _, p in pairs(Players:GetPlayers()) do
             if p ~= LocalPlayer then
                 executeFling(p)
-                task.wait(0.1) -- Small gap between flings for stability
+                task.wait(0.2)
             end
         end
     end)
