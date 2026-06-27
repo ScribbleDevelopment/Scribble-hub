@@ -43,7 +43,7 @@ screenGui.Parent = targetParent
 -- Main Frame Window (Widened to 380 to cleanly fit the ScrollingFrame)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0, 380, 0, 400) -- Adjusted height to properly fit enlarged credits
+mainFrame.Size = UDim2.new(0, 380, 0, 390) -- Height extended to fit credits nicely
 mainFrame.Position = UDim2.new(0.1, 0, 0.2, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 mainFrame.Active = true
@@ -173,18 +173,18 @@ styleElement(infJumpButton, UDim2.new(0, 220, 0, 35), UDim2.new(0, 10, 0, 230), 
 local baseWiperButton = Instance.new("TextButton")
 styleElement(baseWiperButton, UDim2.new(0, 220, 0, 35), UDim2.new(0, 10, 0, 275), "Base Wiper Edition: OFF", Color3.fromRGB(75, 20, 20))
 
--- --- CREDITS INTERFACE ELEMENT (ENLARGED) ---
+-- --- CREDITS INTERFACE ELEMENT ---
 local creditsLabel = Instance.new("TextLabel")
-styleElement(creditsLabel, UDim2.new(0, 220, 0, 45), UDim2.new(0, 10, 0, 320), "by lol1zX_Xz1lol\nYT: @Messy_tsb", Color3.fromRGB(28, 28, 28))
-creditsLabel.TextSize = 15
-creditsLabel.Font = Enum.Font.SourceSansBoldItalic
-creditsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+styleElement(creditsLabel, UDim2.new(0, 220, 0, 35), UDim2.new(0, 10, 0, 320), "by lol1zX_Xz1lol\nYT: @Messy_tsb", Color3.fromRGB(28, 28, 28))
+creditsLabel.TextSize = 12
+creditsLabel.Font = Enum.Font.SourceSansItalic
+creditsLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 
 
 -- --- RIGHT SIDE SCROLLING SLOTS ---
 local scrollFrame = Instance.new("ScrollingFrame")
 scrollFrame.Name = "SlotsScroller"
-scrollFrame.Size = UDim2.new(0, 130, 0, 320)
+scrollFrame.Size = UDim2.new(0, 130, 0, 295) -- Height extended to line up with left side panel
 scrollFrame.Position = UDim2.new(0, 240, 0, 45)
 scrollFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 scrollFrame.BorderSizePixel = 0
