@@ -1,0 +1,749 @@
+-- New file
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
+
+local localPlayer = Players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- Secure joints for R6 and R15 rigs
+local rightShoulder = character:FindFirstChild("Right Shoulder", true) or character:FindFirstChild("RightShoulder", true)
+local leftShoulder = character:FindFirstChild("Left Shoulder", true) or character:FindFirstChild("LeftShoulder", true)
+local neck = character:FindFirstChild("Neck", true)
+local waist = character:FindFirstChild("Waist", true)
+
+-- Save default positions to restore smoothly later
+local origRS = rightShoulder and rightShoulder.C0 or CFrame.new()
+local origLS = leftShoulder and leftShoulder.C0 or CFrame.new()
+local origNeck = neck and neck.C0 or CFrame.new()
+local origWaist = waist and waist.C0 or CFrame.new()
+
+-- State Variables
+local danceActive = false
+local currentDanceIndex = 1
+local isSinging = false
+local isLooped = true
+local currentSongIndex = 1
+local useFullSong = false
+local singingThread = nil
+local isMinimized = false
+
+-- Dynamic File Maps matching the ScribbleDevelopment repository naming layout
+local songDatabase = {
+    {
+        Name = "Beat It",
+        File = "beatit",
+        ShortLyrics = {
+            "So beat it, just beat it!",
+            "No one wants to be defeated",
+            "Just beat it, beat it, beat it, beat it!"
+        }
+    },
+    {
+        Name = "Chicago",
+        File = "chicago",
+        ShortLyrics = {
+            "She said she didn't have no man",
+            "She said she wanted me to take her hand",
+            "She said she was down in Chicago",
+            "Down in Chicago!"
+        }
+    },
+    {
+        Name = "P.Y.T. (Pretty Young Thing)",
+        File = "pytprettyyoungthing",
+        ShortLyrics = {
+            "Tenderoni, you've got to be",
+            "Spark my nature, sugar fly with me!",
+            "I want to love you, P.Y.T.!"
+        }
+    },
+    {
+        Name = "Bad",
+        File = "bad",
+        ShortLyrics = {
+            "Your butt is mine, gonna tell you right",
+            "Just show your face in broad daylight",
+            "I'm telling you on how I feel",
+            "'Cause I'm bad, I'm bad, come on!"
+        }
+    },
+    {
+        Name = "Billie Jean",
+        File = "billiejean",
+        ShortLyrics = {
+            "People always told me be careful of what you do",
+            "And don't go around breaking young girls' hearts",
+            "Billie Jean is not my lover!",
+            "She's just a girl who claims that I am the one"
+        }
+    },
+    {
+        Name = "Smooth Criminal",
+        File = "smoothcriminal",
+        ShortLyrics = {
+            "Annie, are you okay?",
+            "You've been hit by, you've been struck by",
+            "A smooth criminal! Ow!"
+        }
+    },
+    {
+        Name = "Thriller",
+        File = "thriller",
+        ShortLyrics = {
+            "'Cause this is thriller, thriller night!",
+            "You're fighting for your life inside a killer, thriller tonight"
+        }
+    },
+    {
+        Name = "Black or White",
+        File = "blackorwhite",
+        ShortLyrics = {
+            "And I told about equality and it's true",
+            "It don't matter if you're black or white!"
+        }
+    },
+    {
+        Name = "Man in the Mirror",
+        File = "maninthemirror",
+        ShortLyrics = {
+            "I'm starting with the man in the mirror",
+            "If you wanna make the world a better place, take a look at yourself and make a change!"
+        }
+    },
+    {
+        Name = "Rock With You",
+        File = "rockwithyou",
+        ShortLyrics = {
+            "I wanna rock with you, all night",
+            "Rock the night away!"
+        }
+    },
+    {
+        Name = "Don't Stop 'Til You Get Enough",
+        File = "dontstoptilyougetenough",
+        ShortLyrics = {
+            "Keep on with the force, don't stop",
+            "Don't stop 'til you get enough!"
+        }
+    },
+    {
+        Name = "Remember the Time",
+        File = "rememberthetime",
+        ShortLyrics = {
+            "Do you remember the time",
+            "When we fell in love?"
+        }
+    },
+    {
+        Name = "The Way You Make Me Feel",
+        File = "thewayyoumakemefeel",
+        ShortLyrics = {
+            "The way you make me feel",
+            "You really turn me on",
+            "You knock me off of my feet, my lonely days are gone!"
+        }
+    },
+    {
+        Name = "Wanna Be Startin' Somethin'",
+        File = "wannabestartinsomethin",
+        ShortLyrics = {
+            "Mama-say mama-sah ma-ma-coo-sah!"
+        }
+    },
+    {
+        Name = "Dirty Diana",
+        File = "dirtydiana",
+        ShortLyrics = {
+            "Dirty Diana, no!",
+            "Dirty Diana, leave me alone!"
+        }
+    },
+    {
+        Name = "Heal the World",
+        File = "healtheworld",
+        ShortLyrics = {
+            "Heal the world, make it a better place"
+        }
+    },
+    {
+        Name = "They Don't Care About Us",
+        File = "theydontcareaboutus",
+        ShortLyrics = {
+            "All I wanna say is that they don't really care about us!"
+        }
+    },
+    {
+        Name = "You Are Not Alone",
+        File = "youarenotalone",
+        ShortLyrics = {
+            "You are not alone",
+            "I am here with you"
+        }
+    },
+    {
+        Name = "Earth Song",
+        File = "earthsong",
+        ShortLyrics = {
+            "What about sunrise? What about rain?"
+        }
+    },
+    {
+        Name = "Human Nature",
+        File = "humannature",
+        ShortLyrics = {
+            "If they say why, why, tell 'em that it's human nature"
+        }
+    },
+    {
+        Name = "Scream",
+        File = "scream",
+        ShortLyrics = {
+            "Stop pressurin' me, stop pressurin' me",
+            "Make me wanna scream!"
+        }
+    },
+    {
+        Name = "Say Say Say",
+        File = "saysaysay",
+        ShortLyrics = {
+            "Say, say, say what you want"
+        }
+    },
+    {
+        Name = "Off the Wall",
+        File = "offthewall",
+        ShortLyrics = {
+            "Live life off the wall!"
+        }
+    },
+    {
+        Name = "Jam",
+        File = "jam",
+        ShortLyrics = {
+            "Face the problems that we see, then maybe we can jam!"
+        }
+    },
+    {
+        Name = "Blood on the Dance Floor",
+        File = "bloodonthedancefloor",
+        ShortLyrics = {
+            "It was blood on the dance floor"
+        }
+    },
+    {
+        Name = "Stranger in Moscow",
+        File = "strangerinmoscow",
+        ShortLyrics = {
+            "How does it feel when you're alone and you're cold inside?"
+        }
+    },
+    {
+        Name = "Rockin' Robin",
+        File = "rockinrobin",
+        ShortLyrics = {
+            "Rockin' robin, tweet tweet tweet"
+        }
+    },
+    {
+        Name = "You Rock My World",
+        File = "yourockmyworld",
+        ShortLyrics = {
+            "You rock my world, you know you did"
+        }
+    },
+    {
+        Name = "Leave Me Alone",
+        File = "leavemealone",
+        ShortLyrics = {
+            "Just leave me alone"
+        }
+    },
+    {
+        Name = "Who Is It",
+        File = "whoisit",
+        ShortLyrics = {
+            "Who is it? Is it a friend of mine?"
+        }
+    },
+    {
+        Name = "Another Part of Me",
+        File = "anotherpartofme",
+        ShortLyrics = {
+            "We're sending out a major love"
+        }
+    },
+    {
+        Name = "In the Closet",
+        File = "inthecloset",
+        ShortLyrics = {
+            "Keep it in the closet"
+        }
+    },
+    {
+        Name = "Give In to Me",
+        File = "giveintome",
+        ShortLyrics = {
+            "Give in to me, give in to me"
+        }
+    },
+    {
+        Name = "Will You Be There",
+        File = "willyoubethere",
+        ShortLyrics = {
+            "Hold me like the River Jordan"
+        }
+    }
+}
+
+-- Character Custom Physics Dance Profiles
+local danceDatabase = {
+    {
+        Name = "Classic Moonwalk",
+        Update = function()
+            if humanoid.MoveDirection.Magnitude > 0.1 and humanoid:GetState() == Enum.HumanoidStateType.Running then
+                local moveDir = humanoid.MoveDirection
+                rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.lookAt(rootPart.Position, rootPart.Position - moveDir), 0.25)
+                if rightShoulder then rightShoulder.C0 = origRS * CFrame.Angles(math.rad(145), math.rad(-35), math.rad(-25)) end
+                if leftShoulder then leftShoulder.C0 = origLS * CFrame.Angles(math.rad(-10), 0, math.rad(-15)) end
+                if neck then neck.C0 = origNeck * CFrame.Angles(math.rad(-10), 0, 0) end
+                if waist then waist.C0 = origWaist * CFrame.Angles(math.rad(10), 0, 0) end
+            else
+                if rightShoulder then rightShoulder.C0 = rightShoulder.C0:Lerp(origRS, 0.2) end
+                if leftShoulder then leftShoulder.C0 = leftShoulder.C0:Lerp(origLS, 0.2) end
+                if neck then neck.C0 = neck.C0:Lerp(origNeck, 0.2) end
+                if waist then waist.C0 = waist.C0:Lerp(origWaist, 0.2) end
+            end
+        end
+    },
+    {
+        Name = "45-Degree Lean",
+        Update = function()
+            if rightShoulder then rightShoulder.C0 = origRS * CFrame.Angles(math.rad(-20), 0, math.rad(15)) end
+            if leftShoulder then leftShoulder.C0 = origLS * CFrame.Angles(math.rad(-20), 0, math.rad(-15)) end
+            if neck then neck.C0 = origNeck * CFrame.Angles(math.rad(-15), 0, 0) end
+            if waist then waist.C0 = origWaist * CFrame.Angles(math.rad(35), 0, 0) end
+        end
+    },
+    {
+        Name = "Smooth Slide Glide",
+        Update = function()
+            local wave = math.sin(os.clock() * 10)
+            if humanoid.MoveDirection.Magnitude > 0.1 then
+                local moveDir = humanoid.MoveDirection
+                rootPart.CFrame = rootPart.CFrame:Lerp(CFrame.lookAt(rootPart.Position, rootPart.Position - moveDir), 0.25)
+            end
+            if rightShoulder then rightShoulder.C0 = origRS * CFrame.Angles(math.rad(-10), 0, math.rad(20 + wave * 15)) end
+            if leftShoulder then leftShoulder.C0 = origLS * CFrame.Angles(math.rad(-10), 0, math.rad(-20 + wave * 15)) end
+            if neck then neck.C0 = origNeck * CFrame.Angles(0, 0, math.rad(wave * 8)) end
+            if waist then waist.C0 = origWaist * CFrame.Angles(0, math.rad(wave * 12), 0) end
+        end
+    },
+    {
+        Name = "Side Toe Stand Toe Snap",
+        Update = function()
+            local t = os.clock() * 12
+            local pop = math.abs(math.sin(t)) * 0.4
+            if rightShoulder then rightShoulder.C0 = origRS * CFrame.new(0, pop, 0) * CFrame.Angles(math.rad(15), 0, math.rad(25)) end
+            if leftShoulder then leftShoulder.C0 = origLS * CFrame.new(0, pop, 0) * CFrame.Angles(math.rad(-30), math.rad(-20), math.rad(-20)) end
+            if neck then neck.C0 = origNeck * CFrame.Angles(math.rad(10), math.rad(15 * math.sin(t)), 0) end
+            if waist then waist.C0 = origWaist * CFrame.new(0, pop, 0) * CFrame.Angles(0, 0, math.rad(-8)) end
+        end
+    },
+    {
+        Name = "Spin & Pose Shaker",
+        Update = function()
+            local speed = 14
+            local wave = math.sin(os.clock() * speed)
+            if rightShoulder then rightShoulder.C0 = origRS * CFrame.Angles(math.rad(90 + wave * 20), 0, math.rad(-30)) end
+            if leftShoulder then leftShoulder.C0 = origLS * CFrame.Angles(math.rad(90 - wave * 20), 0, math.rad(30)) end
+            if neck then neck.C0 = origNeck * CFrame.Angles(math.rad(wave * 10), 0, 0) end
+            if waist then waist.C0 = origWaist * CFrame.Angles(0, math.rad(wave * 25), 0) end
+        end
+    }
+}
+
+local function stopSingingLogic()
+    if singingThread then
+        task.cancel(singingThread)
+        singingThread = nil
+    end
+end
+
+local function getFullTxtLyrics(url)
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if success and response and string.find(response, "404: Not Found") == nil then
+        local lines = {}
+        for line in string.gmatch(response, "[^\r\n]+") do
+            local cleanLine = string.gsub(line, "^%s*(.-)%s*$", "%1")
+            if #cleanLine > 0 then
+                table.insert(lines, cleanLine)
+            end
+        end
+        return lines
+    else
+        warn("MJ Script Error: 404 target path connection dropped. Check exact repo url characters.")
+    end
+    return nil
+end
+
+local function startSingingLogic()
+    stopSingingLogic()
+    
+    local trackData = songDatabase[currentSongIndex]
+    local targetLyrics = trackData.ShortLyrics
+    
+    if useFullSong then
+        -- Corrected Spelling to 'michaeljackson' to perfectly sync with your absolute path
+        local fullUrl = "https://raw.githubusercontent.com/ScribbleDevelopment/UniqueLyric/refs/heads/master/lyrics/michaeljackson/" .. trackData.File .. ".txt"
+        local fetched = getFullTxtLyrics(fullUrl)
+        if fetched and #fetched > 0 then
+            targetLyrics = fetched
+        else
+            targetLyrics = {"[Script Error: Re-evaluating text link alignment...]"}
+        end
+    end
+    
+    singingThread = task.spawn(function()
+        local textChannel = TextChatService:FindFirstChild("RBXGeneral", true) or TextChatService.TextChannels:FindFirstChild("RBXGeneral")
+        local activeTrackName = trackData.Name
+        
+        repeat
+            for _, lineText in ipairs(targetLyrics) do
+                if not isSinging or trackData.Name ~= activeTrackName then break end
+                
+                if textChannel then
+                    textChannel:SendAsync(lineText)
+                else
+                    game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(lineText, "All")
+                end
+                
+                -- Dynamic anti-spam throttler delay window to safely run through huge lists without filtering
+                task.wait(4.2)
+            end
+            if isSinging and isLooped and trackData.Name == activeTrackName then
+                task.wait(2)
+            end
+        until not isSinging or not isLooped or trackData.Name ~= activeTrackName
+        
+        if isSinging and not isLooped and trackData.Name == activeTrackName then
+            isSinging = false
+            local uiRoot = localPlayer:WaitForChild("PlayerGui", 5) or game:GetService("CoreGui")
+            local Frame = uiRoot:FindFirstChild("MJControlHub", true)
+            if Frame then
+                local StatusIndicator = Frame:FindFirstChild("StatusIndicator", true)
+                if StatusIndicator then
+                    StatusIndicator.Text = "Singing Status: Idle"
+                    StatusIndicator.TextColor3 = Color3.fromRGB(180, 180, 180)
+                end
+            end
+        end
+    end)
+end
+
+localPlayer.CharacterAdded:Connect(function(newCharacter)
+    character = newCharacter
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    
+    rightShoulder = character:FindFirstChild("Right Shoulder", true) or character:FindFirstChild("RightShoulder", true)
+    leftShoulder = character:FindFirstChild("Left Shoulder", true) or character:FindFirstChild("LeftShoulder", true)
+    neck = character:FindFirstChild("Neck", true)
+    waist = character:FindFirstChild("Waist", true)
+    
+    origRS = rightShoulder and rightShoulder.C0 or CFrame.new()
+    origLS = leftShoulder and leftShoulder.C0 or CFrame.new()
+    origNeck = neck and neck.C0 or CFrame.new()
+    origWaist = waist and waist.C0 or CFrame.new()
+    
+    if danceActive and (currentDanceIndex == 1 or currentDanceIndex == 3) then
+        humanoid.AutoRotate = false
+    end
+end)
+
+-- Core Procedural Physics Loop
+RunService.Stepped:Connect(function()
+    if not character or not character:IsDescendantOf(game.Workspace) or humanoid.Health <= 0 then return end
+    
+    if danceActive then
+        if currentDanceIndex == 1 or currentDanceIndex == 3 then
+            humanoid.AutoRotate = false
+        else
+            humanoid.AutoRotate = true
+        end
+        danceDatabase[currentDanceIndex].Update()
+    else
+        humanoid.AutoRotate = true
+        if rightShoulder then rightShoulder.C0 = rightShoulder.C0:Lerp(origRS, 0.2) end
+        if leftShoulder then leftShoulder.C0 = leftShoulder.C0:Lerp(origLS, 0.2) end
+        if neck then neck.C0 = neck.C0:Lerp(origNeck, 0.2) end
+        if waist then waist.C0 = waist.C0:Lerp(origWaist, 0.2) end
+    end
+end)
+
+-- Create GUI Elements
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MJControlHub"
+ScreenGui.ResetOnSpawn = false
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.new(0, 230, 0, 380)
+Frame.Position = UDim2.new(0.05, 0, 0.4, 0)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Frame.BorderSizePixel = 0
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = Frame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(0.75, 0, 0, 35)
+Title.Position = UDim2.new(0.05, 0, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "MJ Control Panel (FE)"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.Font = Enum.Font.SourceSansBold
+Title.TextSize = 18
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = Frame
+
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Size = UDim2.new(1, 0, 1, -35)
+ContentContainer.Position = UDim2.new(0, 0, 0, 35)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Parent = Frame
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 25, 0, 25)
+MinBtn.Position = UDim2.new(0.85, 0, 0.015, 0)
+MinBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+MinBtn.Text = "-"
+MinBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MinBtn.Font = Enum.Font.SourceSansBold
+MinBtn.TextSize = 16
+MinBtn.Parent = Frame
+
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 4)
+MinCorner.Parent = MinBtn
+
+local DanceToggleBtn = Instance.new("TextButton")
+DanceToggleBtn.Size = UDim2.new(0.9, 0, 0, 32)
+DanceToggleBtn.Position = UDim2.new(0.05, 0, 0.02, 0)
+DanceToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+DanceToggleBtn.Text = "Dance Style: OFF"
+DanceToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DanceToggleBtn.Font = Enum.Font.SourceSansBold
+DanceToggleBtn.TextSize = 14
+DanceToggleBtn.Parent = ContentContainer
+
+local DanceToggleCorner = Instance.new("UICorner")
+DanceToggleCorner.CornerRadius = UDim.new(0, 6)
+DanceToggleCorner.Parent = DanceToggleBtn
+
+local DanceSelectBtn = Instance.new("TextButton")
+DanceSelectBtn.Size = UDim2.new(0.9, 0, 0, 32)
+DanceSelectBtn.Position = UDim2.new(0.05, 0, 0.13, 0)
+DanceSelectBtn.BackgroundColor3 = Color3.fromRGB(30, 140, 100)
+DanceSelectBtn.Text = "Style: Classic Moonwalk"
+DanceSelectBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DanceSelectBtn.Font = Enum.Font.SourceSansBold
+DanceSelectBtn.TextSize = 13
+DanceSelectBtn.Parent = ContentContainer
+
+local DanceSelectCorner = Instance.new("UICorner")
+DanceSelectCorner.CornerRadius = UDim.new(0, 6)
+DanceSelectCorner.Parent = DanceSelectBtn
+
+local SongSelectionBtn = Instance.new("TextButton")
+SongSelectionBtn.Size = UDim2.new(0.9, 0, 0, 32)
+SongSelectionBtn.Position = UDim2.new(0.05, 0, 0.24, 0)
+SongSelectionBtn.BackgroundColor3 = Color3.fromRGB(115, 35, 185)
+SongSelectionBtn.Text = "Track: Beat It"
+SongSelectionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+SongSelectionBtn.Font = Enum.Font.SourceSansBold
+SongSelectionBtn.TextSize = 14
+SongSelectionBtn.Parent = ContentContainer
+
+local SongCorner = Instance.new("UICorner")
+SongCorner.CornerRadius = UDim.new(0, 6)
+SongCorner.Parent = SongSelectionBtn
+
+local LengthToggleBtn = Instance.new("TextButton")
+LengthToggleBtn.Size = UDim2.new(0.9, 0, 0, 32)
+LengthToggleBtn.Position = UDim2.new(0.05, 0, 0.35, 0)
+LengthToggleBtn.BackgroundColor3 = Color3.fromRGB(160, 20, 120)
+LengthToggleBtn.Text = "Length: Good Parts"
+LengthToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+LengthToggleBtn.Font = Enum.Font.SourceSansBold
+LengthToggleBtn.TextSize = 14
+LengthToggleBtn.Parent = ContentContainer
+
+local LengthCorner = Instance.new("UICorner")
+LengthCorner.CornerRadius = UDim.new(0, 6)
+LengthCorner.Parent = LengthToggleBtn
+
+local LoopToggleBtn = Instance.new("TextButton")
+LoopToggleBtn.Size = UDim2.new(0.9, 0, 0, 32)
+LoopToggleBtn.Position = UDim2.new(0.05, 0, 0.46, 0)
+LoopToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 150)
+LoopToggleBtn.Text = "Looping: ON"
+LoopToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+LoopToggleBtn.Font = Enum.Font.SourceSansBold
+LoopToggleBtn.TextSize = 14
+LoopToggleBtn.Parent = ContentContainer
+
+local LoopCorner = Instance.new("UICorner")
+LoopCorner.CornerRadius = UDim.new(0, 6)
+LoopCorner.Parent = LoopToggleBtn
+
+local StartSingBtn = Instance.new("TextButton")
+StartSingBtn.Size = UDim2.new(0.9, 0, 0, 32)
+StartSingBtn.Position = UDim2.new(0.05, 0, 0.59, 0)
+StartSingBtn.BackgroundColor3 = Color3.fromRGB(40, 120, 220)
+StartSingBtn.Text = "Start Singing"
+StartSingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+StartSingBtn.Font = Enum.Font.SourceSansBold
+StartSingBtn.TextSize = 14
+StartSingBtn.Parent = ContentContainer
+
+local StartSingCorner = Instance.new("UICorner")
+StartSingCorner.CornerRadius = UDim.new(0, 6)
+StartSingCorner.Parent = StartSingBtn
+
+local StopSingBtn = Instance.new("TextButton")
+StopSingBtn.Size = UDim2.new(0.9, 0, 0, 32)
+StopSingBtn.Position = UDim2.new(0.05, 0, 0.70, 0)
+StopSingBtn.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+StopSingBtn.Text = "Stop Singing"
+StopSingBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+StopSingBtn.Font = Enum.Font.SourceSansBold
+StopSingBtn.TextSize = 14
+StopSingBtn.Parent = ContentContainer
+
+local StopSingCorner = Instance.new("UICorner")
+StopSingCorner.CornerRadius = UDim.new(0, 6)
+StopSingCorner.Parent = StopSingBtn
+
+local StatusIndicator = Instance.new("TextLabel")
+StatusIndicator.Name = "StatusIndicator"
+StatusIndicator.Size = UDim2.new(0.9, 0, 0, 32)
+StatusIndicator.Position = UDim2.new(0.05, 0, 0.86, 0)
+StatusIndicator.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+StatusIndicator.Text = "Singing Status: Idle"
+StatusIndicator.TextColor3 = Color3.fromRGB(180, 180, 180)
+StatusIndicator.Font = Enum.Font.SourceSans
+StatusIndicator.TextSize = 13
+StatusIndicator.Parent = ContentContainer
+
+local StatusCorner = Instance.new("UICorner")
+StatusCorner.CornerRadius = UDim.new(0, 6)
+StatusCorner.Parent = StatusIndicator
+
+-- Configuration Mappings
+MinBtn.MouseButton1Click:Connect(function()
+    isMinimized = not isMinimized
+    if isMinimized then
+        ContentContainer.Visible = false
+        Frame.Size = UDim2.new(0, 230, 0, 35)
+        MinBtn.Text = "+"
+    else
+        ContentContainer.Visible = true
+        Frame.Size = UDim2.new(0, 230, 0, 380)
+        MinBtn.Text = "-"
+    end
+end)
+
+DanceToggleBtn.MouseButton1Click:Connect(function()
+    danceActive = not danceActive
+    if danceActive then
+        DanceToggleBtn.Text = "Dance Style: ON"
+        DanceToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 70)
+    else
+        DanceToggleBtn.Text = "Dance Style: OFF"
+        DanceToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+        if humanoid then humanoid.AutoRotate = true end
+    end
+end)
+
+DanceSelectBtn.MouseButton1Click:Connect(function()
+    currentDanceIndex = currentDanceIndex + 1
+    if currentDanceIndex > #danceDatabase then
+        currentDanceIndex = 1
+    end
+    DanceSelectBtn.Text = "Style: " .. danceDatabase[currentDanceIndex].Name
+end)
+
+SongSelectionBtn.MouseButton1Click:Connect(function()
+    currentSongIndex = currentSongIndex + 1
+    if currentSongIndex > #songDatabase then
+        currentSongIndex = 1
+    end
+    
+    local activeTrack = songDatabase[currentSongIndex]
+    SongSelectionBtn.Text = "Track: " .. activeTrack.Name
+    
+    if isSinging then
+        startSingingLogic()
+    end
+end)
+
+LengthToggleBtn.MouseButton1Click:Connect(function()
+    useFullSong = not useFullSong
+    if useFullSong then
+        LengthToggleBtn.Text = "Length: Full Song"
+        LengthToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 30, 80)
+    else
+        LengthToggleBtn.Text = "Length: Good Parts"
+        LengthToggleBtn.BackgroundColor3 = Color3.fromRGB(160, 20, 120)
+    end
+    
+    if isSinging then
+        startSingingLogic()
+    end
+end)
+
+LoopToggleBtn.MouseButton1Click:Connect(function()
+    isLooped = not isLooped
+    if isLooped then
+        LoopToggleBtn.Text = "Looping: ON"
+        LoopToggleBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 150)
+    else
+        LoopToggleBtn.Text = "Looping: OFF"
+        LoopToggleBtn.BackgroundColor3 = Color3.fromRGB(180, 75, 40)
+    end
+end)
+
+StartSingBtn.MouseButton1Click:Connect(function()
+    if not isSinging then
+        isSinging = true
+        StatusIndicator.Text = "Singing Status: Active"
+        StatusIndicator.TextColor3 = Color3.fromRGB(50, 220, 110)
+        startSingingLogic()
+    end
+end)
+
+StopSingBtn.MouseButton1Click:Connect(function()
+    if isSinging then
+        isSinging = false
+        StatusIndicator.Text = "Singing Status: Idle"
+        StatusIndicator.TextColor3 = Color3.fromRGB(180, 180, 180)
+        stopSingingLogic()
+    end
+end)
+
+local CoreGui = game:GetService("CoreGui")
+local success, err = pcall(function()
+    ScreenGui.Parent = CoreGui
+end)
+if not success then
+    ScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+end
